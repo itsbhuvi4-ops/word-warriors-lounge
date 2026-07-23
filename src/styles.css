@@ -4,20 +4,6 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/*
- * Design system definition.
- *
- * The @theme inline block maps CSS custom properties to Tailwind utility
- * classes (e.g. --color-primary -> bg-primary, text-primary).
- *
- * The :root and .dark blocks define the actual color values using oklch.
- * All colors MUST use oklch format.
- *
- * To add a new semantic color:
- * 1. Add the variable to :root (light value) and .dark (dark value)
- * 2. Register it in @theme inline as --color-<name>: var(--<name>)
- */
-
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -59,29 +45,39 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --font-display: "Cinzel Decorative", "Cinzel", serif;
+  --font-heading: "Cinzel", serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --color-emerald-glow: var(--emerald-glow);
+  --color-emerald-deep: var(--emerald-deep);
+  --color-parchment: var(--parchment);
 }
 
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.129 0.042 264.695);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.129 0.042 264.695);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.129 0.042 264.695);
-  --primary: oklch(0.208 0.042 265.755);
-  --primary-foreground: oklch(0.984 0.003 247.858);
-  --secondary: oklch(0.968 0.007 247.896);
-  --secondary-foreground: oklch(0.208 0.042 265.755);
-  --muted: oklch(0.968 0.007 247.896);
-  --muted-foreground: oklch(0.554 0.046 257.417);
-  --accent: oklch(0.968 0.007 247.896);
-  --accent-foreground: oklch(0.208 0.042 265.755);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.984 0.003 247.858);
-  --border: oklch(0.929 0.013 255.508);
-  --input: oklch(0.929 0.013 255.508);
-  --ring: oklch(0.704 0.04 256.788);
+  --radius: 0.25rem;
+  --background: oklch(0.14 0.02 175);
+  --foreground: oklch(0.94 0.02 130);
+  --card: oklch(0.19 0.03 175);
+  --card-foreground: oklch(0.94 0.02 130);
+  --popover: oklch(0.16 0.02 175);
+  --popover-foreground: oklch(0.94 0.02 130);
+  --primary: oklch(0.75 0.18 165);
+  --primary-foreground: oklch(0.12 0.02 175);
+  --secondary: oklch(0.24 0.04 175);
+  --secondary-foreground: oklch(0.94 0.02 130);
+  --muted: oklch(0.22 0.03 175);
+  --muted-foreground: oklch(0.68 0.05 160);
+  --accent: oklch(0.68 0.19 160);
+  --accent-foreground: oklch(0.12 0.02 175);
+  --destructive: oklch(0.62 0.24 25);
+  --destructive-foreground: oklch(0.98 0.01 0);
+  --border: oklch(0.32 0.06 165);
+  --input: oklch(0.22 0.04 175);
+  --ring: oklch(0.68 0.19 160);
+  --emerald-glow: oklch(0.78 0.2 165);
+  --emerald-deep: oklch(0.35 0.1 170);
+  --parchment: oklch(0.92 0.04 90);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
@@ -98,9 +94,9 @@
 }
 
 .dark {
-  --background: oklch(0.129 0.042 264.695);
-  --foreground: oklch(0.984 0.003 247.858);
-  --card: oklch(0.208 0.042 265.755);
+  --background: oklch(0.14 0.02 175);
+  --foreground: oklch(0.94 0.02 130);
+  --card: oklch(0.19 0.03 175);
   --card-foreground: oklch(0.984 0.003 247.858);
   --popover: oklch(0.208 0.042 265.755);
   --popover-foreground: oklch(0.984 0.003 247.858);
@@ -140,5 +136,82 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
+    font-family: var(--font-sans);
+    background-image:
+      radial-gradient(ellipse at top, oklch(0.22 0.08 165 / 0.6), transparent 60%),
+      radial-gradient(ellipse at bottom, oklch(0.18 0.06 175 / 0.5), transparent 60%);
+    background-attachment: fixed;
   }
+
+  h1, h2, h3, .font-display {
+    font-family: var(--font-display);
+    letter-spacing: 0.02em;
+  }
+}
+
+@utility rune-frame {
+  position: relative;
+  border: 1px solid oklch(0.5 0.15 165 / 0.5);
+  background: linear-gradient(180deg, oklch(0.18 0.04 175 / 0.85), oklch(0.12 0.03 175 / 0.85));
+  box-shadow:
+    inset 0 0 0 1px oklch(0.3 0.08 170 / 0.4),
+    0 0 30px oklch(0.5 0.2 165 / 0.2),
+    0 10px 40px oklch(0 0 0 / 0.5);
+  backdrop-filter: blur(4px);
+}
+
+@utility rune-frame::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  pointer-events: none;
+  background: linear-gradient(135deg, transparent, oklch(0.65 0.2 165 / 0.15), transparent 40%, transparent 60%, oklch(0.65 0.2 165 / 0.15), transparent);
+}
+
+@utility text-glow {
+  text-shadow: 0 0 20px oklch(0.7 0.2 165 / 0.6), 0 0 40px oklch(0.7 0.2 165 / 0.3);
+}
+
+@utility btn-fantasy {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.85rem 2rem;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: oklch(0.96 0.03 130);
+  background: linear-gradient(180deg, oklch(0.32 0.1 170), oklch(0.2 0.06 175));
+  border: 1px solid oklch(0.65 0.2 165 / 0.6);
+  box-shadow:
+    inset 0 1px 0 oklch(0.7 0.15 165 / 0.3),
+    0 0 20px oklch(0.6 0.2 165 / 0.3),
+    0 4px 20px oklch(0 0 0 / 0.5);
+  transition: all 200ms ease;
+  cursor: pointer;
+  clip-path: polygon(8px 0, calc(100% - 8px) 0, 100% 50%, calc(100% - 8px) 100%, 8px 100%, 0 50%);
+}
+
+@utility btn-fantasy:hover {
+  background: linear-gradient(180deg, oklch(0.42 0.14 168), oklch(0.28 0.08 172));
+  box-shadow:
+    inset 0 1px 0 oklch(0.8 0.18 165 / 0.5),
+    0 0 35px oklch(0.7 0.22 165 / 0.5),
+    0 4px 25px oklch(0 0 0 / 0.6);
+}
+
+@utility btn-fantasy:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 20px oklch(0.7 0.2 165 / 0.4); }
+  50% { box-shadow: 0 0 40px oklch(0.7 0.22 165 / 0.7); }
+}
+
+@utility animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
 }
