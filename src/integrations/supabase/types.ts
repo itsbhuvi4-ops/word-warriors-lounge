@@ -14,7 +14,105 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      game_rooms: {
+        Row: {
+          code: string
+          created_at: string
+          guest_acc: number
+          guest_character: string | null
+          guest_id: string | null
+          guest_name: string | null
+          guest_progress: number
+          guest_wpm: number
+          host_acc: number
+          host_character: string | null
+          host_id: string
+          host_name: string
+          host_progress: number
+          host_wpm: number
+          id: string
+          phase: string
+          place: string | null
+          prompt: string | null
+          started_at: string | null
+          updated_at: string
+          winner: string | null
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          guest_acc?: number
+          guest_character?: string | null
+          guest_id?: string | null
+          guest_name?: string | null
+          guest_progress?: number
+          guest_wpm?: number
+          host_acc?: number
+          host_character?: string | null
+          host_id: string
+          host_name: string
+          host_progress?: number
+          host_wpm?: number
+          id?: string
+          phase?: string
+          place?: string | null
+          prompt?: string | null
+          started_at?: string | null
+          updated_at?: string
+          winner?: string | null
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          guest_acc?: number
+          guest_character?: string | null
+          guest_id?: string | null
+          guest_name?: string | null
+          guest_progress?: number
+          guest_wpm?: number
+          host_acc?: number
+          host_character?: string | null
+          host_id?: string
+          host_name?: string
+          host_progress?: number
+          host_wpm?: number
+          id?: string
+          phase?: string
+          place?: string | null
+          prompt?: string | null
+          started_at?: string | null
+          updated_at?: string
+          winner?: string | null
+        }
+        Relationships: []
+      }
+      leaderboard: {
+        Row: {
+          best_acc: number
+          best_wpm: number
+          losses: number
+          name: string
+          updated_at: string
+          wins: number
+        }
+        Insert: {
+          best_acc?: number
+          best_wpm?: number
+          losses?: number
+          name: string
+          updated_at?: string
+          wins?: number
+        }
+        Update: {
+          best_acc?: number
+          best_wpm?: number
+          losses?: number
+          name?: string
+          updated_at?: string
+          wins?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
