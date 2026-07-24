@@ -7,6 +7,7 @@ import {
   getPlayerName,
   setPlayerName,
 } from "@/lib/game-data";
+import { createRoomFn, joinRoomFn } from "@/lib/game.functions";
 
 export const Route = createFileRoute("/lobby")({
   head: () => ({
@@ -54,15 +55,14 @@ function Lobby() {
     setBusy(true);
     setPlayerName(n);
     const code = generateRoomCode();
-    const { error: err } = await supabase.from("game_rooms").insert({
-      code,
-      host_id: getPlayerId(),
-      host_name: n,
-      phase: "waiting",
-    });
-    setBusy(false);
-    if (err) return setError(err.message);
-    navigate({ to: "/room/$code", params: { code } });
+    try {
+      await createRoomFn({ data: { playerId: getPlayerId(), name: n, code } });
+      setBusy(false);
+      navigate({ to: "/room/$code", params: { code } });
+    } catch (e) {
+      setBusy(false);
+      setError(e instanceof Error ? e.message : "Failed to create room");
+    }
   }
 
   async function joinRoom() {
@@ -73,31 +73,14 @@ function Lobby() {
     if (code.length !== 4) return setError("Enter a 4-character room code");
     setBusy(true);
     setPlayerName(n);
-    const { data, error: err } = await supabase
-      .from("game_rooms")
-      .select("*")
-      .eq("code", code)
-      .maybeSingle();
-    if (err || !data) {
+    try {
+      await joinRoomFn({ data: { playerId: getPlayerId(), name: n, code } });
       setBusy(false);
-      return setError("Room not found");
-    }
-    if (data.guest_id && data.guest_id !== getPlayerId()) {
+      navigate({ to: "/room/$code", params: { code } });
+    } catch (e) {
       setBusy(false);
-      return setError("Room is full");
+      setError(e instanceof Error ? e.message : "Room not found");
     }
-    const { error: uErr } = await supabase
-      .from("game_rooms")
-      .update({
-        guest_id: getPlayerId(),
-        guest_name: n,
-        phase: "character",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("code", code);
-    setBusy(false);
-    if (uErr) return setError(uErr.message);
-    navigate({ to: "/room/$code", params: { code } });
   }
 
   function updateCodeChar(i: number, v: string) {
