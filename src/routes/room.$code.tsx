@@ -10,11 +10,14 @@ import {
   placeById,
   randomPrompt,
 } from "@/lib/game-data";
+import {
+  getMyRoleFn,
+  submitResultFn,
+  updateRoomFn,
+} from "@/lib/game.functions";
 
 type Room = {
   code: string;
-  host_id: string;
-  guest_id: string | null;
   host_name: string;
   guest_name: string | null;
   host_character: string | null;
@@ -48,15 +51,29 @@ function RoomPage() {
   const [room, setRoom] = useState<Room | null>(null);
   const [loading, setLoading] = useState(true);
   const playerId = useMemo(() => (typeof window !== "undefined" ? getPlayerId() : ""), []);
+  const [role, setRole] = useState<"host" | "guest" | null>(null);
 
   useEffect(() => {
     if (!playerId) return;
     let cancelled = false;
 
     const load = async () => {
-      const { data } = await supabase.from("game_rooms").select("*").eq("code", code).maybeSingle();
+      const { data } = await supabase
+        .from("game_rooms")
+        .select(
+          "code,host_name,guest_name,host_character,guest_character,place,phase,prompt,host_progress,guest_progress,host_wpm,guest_wpm,host_acc,guest_acc,winner,started_at",
+        )
+        .eq("code", code)
+        .maybeSingle();
+      let r: { role: "host" | "guest" | null } = { role: null };
+      try {
+        r = await getMyRoleFn({ data: { playerId, code } });
+      } catch {
+        r = { role: null };
+      }
       if (!cancelled) {
         setRoom(data as Room | null);
+        setRole(r.role);
         setLoading(false);
       }
     };
@@ -79,37 +96,37 @@ function RoomPage() {
     };
   }, [code, playerId]);
 
-  const isHost = room?.host_id === playerId;
-  const isGuest = room?.guest_id === playerId;
+  const isHost = role === "host";
+  const isGuest = role === "guest";
   const inRoom = isHost || isGuest;
 
   // Host-driven phase transitions
   useEffect(() => {
     if (!room || !isHost) return;
-    if (room.phase === "waiting" && room.guest_id) {
-      supabase.from("game_rooms").update({ phase: "character" }).eq("code", code);
-    }
     if (room.phase === "character" && room.host_character && room.guest_character) {
-      supabase.from("game_rooms").update({ phase: "place" }).eq("code", code);
+      updateRoomFn({ data: { playerId, code, patch: { phase: "place" } } }).catch(() => {});
     }
     if (room.phase === "place" && room.place && !room.prompt) {
-      supabase
-        .from("game_rooms")
-        .update({
-          prompt: randomPrompt(),
-          phase: "battle",
-          started_at: new Date().toISOString(),
-          host_progress: 0,
-          guest_progress: 0,
-          host_wpm: 0,
-          guest_wpm: 0,
-          host_acc: 100,
-          guest_acc: 100,
-          winner: null,
-        })
-        .eq("code", code);
+      updateRoomFn({
+        data: {
+          playerId,
+          code,
+          patch: {
+            prompt: randomPrompt(),
+            phase: "battle",
+            started_at: new Date().toISOString(),
+            host_progress: 0,
+            guest_progress: 0,
+            host_wpm: 0,
+            guest_wpm: 0,
+            host_acc: 100,
+            guest_acc: 100,
+            winner: null,
+          },
+        },
+      }).catch(() => {});
     }
-  }, [room, isHost, code]);
+  }, [room, isHost, code, playerId]);
 
   if (loading) {
     return <CenterMsg>Summoning the arena…</CenterMsg>;
@@ -135,10 +152,10 @@ function RoomPage() {
     <div className="min-h-screen px-4 py-8 md:px-10">
       <TopBar code={room.code} onLeave={() => navigate({ to: "/lobby" })} />
       {room.phase === "waiting" && <WaitingScreen room={room} />}
-      {room.phase === "character" && <CharacterSelect room={room} isHost={isHost} code={code} />}
-      {room.phase === "place" && <PlaceSelect room={room} isHost={isHost} code={code} />}
-      {room.phase === "battle" && <BattleScreen room={room} isHost={isHost} code={code} />}
-      {room.phase === "finished" && <ResultScreen room={room} isHost={isHost} code={code} />}
+      {room.phase === "character" && <CharacterSelect room={room} isHost={isHost} code={code} playerId={playerId} />}
+      {room.phase === "place" && <PlaceSelect room={room} isHost={isHost} code={code} playerId={playerId} />}
+      {room.phase === "battle" && <BattleScreen room={room} isHost={isHost} code={code} playerId={playerId} />}
+      {room.phase === "finished" && <ResultScreen room={room} isHost={isHost} code={code} playerId={playerId} />}
     </div>
   );
 }
@@ -187,13 +204,13 @@ function WaitingScreen({ room }: { room: Room }) {
   );
 }
 
-function CharacterSelect({ room, isHost, code }: { room: Room; isHost: boolean; code: string }) {
+function CharacterSelect({ room, isHost, code, playerId }: { room: Room; isHost: boolean; code: string; playerId: string }) {
   const myPick = isHost ? room.host_character : room.guest_character;
   const oppPick = isHost ? room.guest_character : room.host_character;
 
   async function pick(id: string) {
     const patch = isHost ? { host_character: id } : { guest_character: id };
-    await supabase.from("game_rooms").update(patch).eq("code", code);
+    await updateRoomFn({ data: { playerId, code, patch } }).catch(() => {});
   }
 
   return (
@@ -238,10 +255,10 @@ function CharacterSelect({ room, isHost, code }: { room: Room; isHost: boolean; 
   );
 }
 
-function PlaceSelect({ room, isHost, code }: { room: Room; isHost: boolean; code: string }) {
+function PlaceSelect({ room, isHost, code, playerId }: { room: Room; isHost: boolean; code: string; playerId: string }) {
   async function pick(id: string) {
     if (!isHost) return; // host chooses arena
-    await supabase.from("game_rooms").update({ place: id }).eq("code", code);
+    await updateRoomFn({ data: { playerId, code, patch: { place: id } } }).catch(() => {});
   }
 
   return (
@@ -279,7 +296,7 @@ function PlaceSelect({ room, isHost, code }: { room: Room; isHost: boolean; code
   );
 }
 
-function BattleScreen({ room, isHost, code }: { room: Room; isHost: boolean; code: string }) {
+function BattleScreen({ room, isHost, code, playerId }: { room: Room; isHost: boolean; code: string; playerId: string }) {
   const prompt = room.prompt ?? "";
   const [typed, setTyped] = useState("");
   const [errors, setErrors] = useState(0);
@@ -310,12 +327,11 @@ function BattleScreen({ room, isHost, code }: { room: Room; isHost: boolean; cod
         ? { host_progress: progressPct, host_wpm: wpm, host_acc: acc }
         : { guest_progress: progressPct, guest_wpm: wpm, guest_acc: acc };
       const winPatch = isWin ? { phase: "finished", winner: myName ?? "" } : {};
-      await supabase
-        .from("game_rooms")
-        .update({ ...patch, ...winPatch, updated_at: new Date().toISOString() })
-        .eq("code", code);
+      await updateRoomFn({
+        data: { playerId, code, patch: { ...patch, ...winPatch } },
+      }).catch(() => {});
     },
-    [isHost, code, myName],
+    [isHost, code, myName, playerId],
   );
 
   function onChange(v: string) {
@@ -490,7 +506,7 @@ function Fighter({
   );
 }
 
-function ResultScreen({ room, isHost, code }: { room: Room; isHost: boolean; code: string }) {
+function ResultScreen({ room, isHost, code, playerId }: { room: Room; isHost: boolean; code: string; playerId: string }) {
   const myName = isHost ? room.host_name : room.guest_name;
   const won = room.winner === myName;
   const myWpm = isHost ? room.host_wpm : room.guest_wpm;
@@ -500,51 +516,34 @@ function ResultScreen({ room, isHost, code }: { room: Room; isHost: boolean; cod
   useEffect(() => {
     if (reported.current || !myName) return;
     reported.current = true;
-    (async () => {
-      const { data: existing } = await supabase.from("leaderboard").select("*").eq("name", myName).maybeSingle();
-      if (!existing) {
-        await supabase.from("leaderboard").insert({
-          name: myName,
-          wins: won ? 1 : 0,
-          losses: won ? 0 : 1,
-          best_wpm: myWpm,
-          best_acc: myAcc,
-        });
-      } else {
-        await supabase
-          .from("leaderboard")
-          .update({
-            wins: (existing as any).wins + (won ? 1 : 0),
-            losses: (existing as any).losses + (won ? 0 : 1),
-            best_wpm: Math.max((existing as any).best_wpm, myWpm),
-            best_acc: Math.max((existing as any).best_acc, myAcc),
-            updated_at: new Date().toISOString(),
-          })
-          .eq("name", myName);
-      }
-    })();
-  }, [myName, won, myWpm, myAcc]);
+    submitResultFn({
+      data: { playerId, name: myName, won, wpm: myWpm, acc: myAcc },
+    }).catch(() => {});
+  }, [myName, won, myWpm, myAcc, playerId]);
 
   async function rematch() {
     if (!isHost) return;
-    await supabase
-      .from("game_rooms")
-      .update({
-        phase: "character",
-        host_character: null,
-        guest_character: null,
-        place: null,
-        prompt: null,
-        host_progress: 0,
-        guest_progress: 0,
-        host_wpm: 0,
-        guest_wpm: 0,
-        host_acc: 100,
-        guest_acc: 100,
-        winner: null,
-        started_at: null,
-      })
-      .eq("code", code);
+    await updateRoomFn({
+      data: {
+        playerId,
+        code,
+        patch: {
+          phase: "character",
+          host_character: null,
+          guest_character: null,
+          place: null,
+          prompt: null,
+          host_progress: 0,
+          guest_progress: 0,
+          host_wpm: 0,
+          guest_wpm: 0,
+          host_acc: 100,
+          guest_acc: 100,
+          winner: null,
+          started_at: null,
+        },
+      },
+    }).catch(() => {});
   }
 
   return (
