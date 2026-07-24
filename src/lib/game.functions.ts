@@ -128,7 +128,7 @@ export const updateRoomFn = createServerFn({ method: "POST" })
     patch.updated_at = new Date().toISOString();
     const { error } = await s
       .from("game_rooms")
-      .update(patch)
+      .update(patch as never)
       .eq("code", data.code);
     if (error) throw new Error(error.message);
     return { ok: true as const };
