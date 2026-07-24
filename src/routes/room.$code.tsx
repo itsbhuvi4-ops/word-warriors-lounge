@@ -305,6 +305,19 @@ function BattleScreen({ room, isHost, code, playerId }: { room: Room; isHost: bo
   const inputRef = useRef<HTMLInputElement>(null);
   const finishedRef = useRef(false);
 
+  // Fighting FX state
+  const [myAttackKey, setMyAttackKey] = useState(0);
+  const [oppHurtKey, setOppHurtKey] = useState(0);
+  const [myHurtKey, setMyHurtKey] = useState(0);
+  const [oppAttackKey, setOppAttackKey] = useState(0);
+  const [shakeKey, setShakeKey] = useState(0);
+  const [combo, setCombo] = useState(0);
+  const [comboFlash, setComboFlash] = useState(0);
+  const [sparks, setSparks] = useState<{ id: number; x: number; y: number; side: "left" | "right" }[]>([]);
+  const lastKeyAt = useRef<number>(0);
+  const comboTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevOppProgress = useRef(0);
+
   const place = placeById(room.place);
   const myChar = characterById(isHost ? room.host_character : room.guest_character);
   const oppChar = characterById(isHost ? room.guest_character : room.host_character);
@@ -317,9 +330,36 @@ function BattleScreen({ room, isHost, code, playerId }: { room: Room; isHost: bo
   const myAcc = isHost ? room.host_acc : room.guest_acc;
   const oppAcc = isHost ? room.guest_acc : room.host_acc;
 
+  // Health = 100 - damage taken from opponent progress
+  const myHealth = Math.max(0, 100 - oppProgress);
+  const oppHealth = Math.max(0, 100 - myProgress);
+
+  // Trigger opponent attack + my hurt when their progress ticks up
+  useEffect(() => {
+    if (oppProgress > prevOppProgress.current) {
+      setOppAttackKey((k) => k + 1);
+      setMyHurtKey((k) => k + 1);
+      setShakeKey((k) => k + 1);
+      spawnSpark("right");
+    }
+    prevOppProgress.current = oppProgress;
+  }, [oppProgress]);
+
   useEffect(() => {
     inputRef.current?.focus();
+    return () => {
+      if (comboTimer.current) clearTimeout(comboTimer.current);
+    };
   }, []);
+
+  function spawnSpark(side: "left" | "right") {
+    const id = Date.now() + Math.random();
+    // spark near the receiving fighter, based on their side
+    const x = side === "left" ? 78 : 22; // percent
+    const y = 55 + Math.random() * 10;
+    setSparks((s) => [...s, { id, x, y, side }]);
+    setTimeout(() => setSparks((s) => s.filter((sp) => sp.id !== id)), 420);
+  }
 
   const pushUpdate = useCallback(
     async (progressPct: number, wpm: number, acc: number, isWin: boolean) => {
@@ -338,6 +378,12 @@ function BattleScreen({ room, isHost, code, playerId }: { room: Room; isHost: bo
     if (finishedRef.current) return;
     // No editing past end
     if (v.length > prompt.length) v = v.slice(0, prompt.length);
+    const prevLen = typed.length;
+    const isForward = v.length > prevLen;
+    const newestIdx = v.length - 1;
+    const struckCorrect = isForward && newestIdx >= 0 && v[newestIdx] === prompt[newestIdx];
+    const struckWrong = isForward && newestIdx >= 0 && v[newestIdx] !== prompt[newestIdx];
+
     // Count errors incrementally: any position where v[i] !== prompt[i] adds an error at the moment of press
     let e = 0;
     for (let i = 0; i < v.length; i++) if (v[i] !== prompt[i]) e++;
@@ -350,6 +396,27 @@ function BattleScreen({ room, isHost, code, playerId }: { room: Room; isHost: bo
     const wpm = Math.round(correct / 5 / minutes);
     const acc = v.length === 0 ? 100 : Math.round((correct / v.length) * 100);
 
+    // FX + combo
+    if (struckCorrect) {
+      setMyAttackKey((k) => k + 1);
+      setOppHurtKey((k) => k + 1);
+      setShakeKey((k) => k + 1);
+      spawnSpark("left");
+      const now = Date.now();
+      const fast = now - lastKeyAt.current < 220;
+      lastKeyAt.current = now;
+      setCombo((c) => {
+        const next = fast ? c + 1 : 1;
+        if (next % 5 === 0 && next > 0) setComboFlash(next);
+        return next;
+      });
+      if (comboTimer.current) clearTimeout(comboTimer.current);
+      comboTimer.current = setTimeout(() => setCombo(0), 900);
+    } else if (struckWrong) {
+      setMyHurtKey((k) => k + 1);
+      setCombo(0);
+    }
+
     const isWin = v === prompt;
     if (isWin) {
       finishedRef.current = true;
@@ -361,28 +428,67 @@ function BattleScreen({ room, isHost, code, playerId }: { room: Room; isHost: bo
   const showWinner = room.phase === "finished";
 
   return (
-    <div className="mx-auto max-w-6xl">
+    <div key={shakeKey} className="mx-auto max-w-6xl fx-screen-shake">
       {/* HUD */}
-      <div className="mb-4 grid grid-cols-2 gap-6">
-        <PlayerHud side="left" name={myName ?? "You"} char={myChar} progress={myProgress} wpm={myWpm} acc={myAcc} accent="primary" />
-        <PlayerHud side="right" name={oppName ?? "Foe"} char={oppChar} progress={oppProgress} wpm={oppWpm} acc={oppAcc} accent="destructive" />
+      <div className="mb-4 grid grid-cols-[1fr_auto_1fr] items-center gap-4">
+        <PlayerHud side="left" name={myName ?? "You"} char={myChar} health={myHealth} progress={myProgress} wpm={myWpm} acc={myAcc} accent="primary" />
+        <ComboMeter combo={combo} flash={comboFlash} />
+        <PlayerHud side="right" name={oppName ?? "Foe"} char={oppChar} health={oppHealth} progress={oppProgress} wpm={oppWpm} acc={oppAcc} accent="destructive" />
       </div>
 
       {/* Arena */}
       <div
-        className="relative h-72 overflow-hidden border border-primary/40"
+        className="relative h-80 overflow-hidden border border-primary/40 neon-arena"
         style={{
           backgroundImage: place ? `url(${place.image})` : undefined,
           backgroundSize: "cover",
           backgroundPosition: "center",
         }}
       >
-        <div className="absolute inset-0 bg-background/50" />
-        <div className="absolute inset-x-0 bottom-6 mx-8 h-px bg-primary/40" />
+        <div className="absolute inset-0 bg-gradient-to-b from-background/30 via-transparent to-background/70" />
+        {/* neon grid overlay */}
+        <div
+          className="absolute inset-0 opacity-40 mix-blend-screen"
+          style={{
+            backgroundImage:
+              "repeating-linear-gradient(90deg, oklch(0.75 0.28 320 / 0.25) 0 1px, transparent 1px 44px), repeating-linear-gradient(0deg, oklch(0.75 0.28 200 / 0.18) 0 1px, transparent 1px 44px)",
+          }}
+        />
+        <div className="absolute inset-x-0 bottom-6 mx-8 h-px bg-primary/60 shadow-[0_0_18px_var(--emerald-glow)]" />
 
-        {/* Fighters */}
-        <Fighter side="left" progress={myProgress} char={myChar} accent="primary" />
-        <Fighter side="right" progress={oppProgress} char={oppChar} accent="destructive" />
+        {/* Fighters with attack/hurt animation wrappers */}
+        <FighterFX
+          side="left"
+          progress={myProgress}
+          char={myChar}
+          accent="primary"
+          attackKey={myAttackKey}
+          hurtKey={myHurtKey}
+        />
+        <FighterFX
+          side="right"
+          progress={oppProgress}
+          char={oppChar}
+          accent="destructive"
+          attackKey={oppAttackKey}
+          hurtKey={oppHurtKey}
+        />
+
+        {/* Hit sparks */}
+        {sparks.map((s) => (
+          <span key={s.id} className="spark" style={{ left: `${s.x}%`, top: `${s.y}%` }} />
+        ))}
+
+        {/* Combo callout */}
+        {combo >= 5 && !showWinner && (
+          <div
+            key={comboFlash}
+            className="pointer-events-none absolute left-1/2 top-6 -translate-x-1/2 fx-combo-pop font-display text-4xl tracking-widest text-glow"
+            style={{ color: "oklch(0.9 0.25 60)" }}
+          >
+            {combo} HIT COMBO!
+          </div>
+        )}
 
         {showWinner && (
           <div className="absolute inset-0 flex items-center justify-center bg-background/80">
@@ -413,7 +519,7 @@ function BattleScreen({ room, isHost, code, playerId }: { room: Room; isHost: bo
           })}
         </div>
         <p className="mt-4 text-xs tracking-widest text-muted-foreground">
-          {finished ? "Awaiting result…" : "Just start typing — no need to click anything. Wrong keys chip your accuracy."}
+          {finished ? "Awaiting result…" : "Type fast — correct keys punch, mistakes get you hit. 5+ combo unleashes a special."}
         </p>
         <input
           ref={inputRef}
@@ -438,6 +544,7 @@ function PlayerHud({
   side,
   name,
   char,
+  health,
   progress,
   wpm,
   acc,
@@ -446,35 +553,146 @@ function PlayerHud({
   side: "left" | "right";
   name: string;
   char: ReturnType<typeof characterById>;
+  health: number;
   progress: number;
   wpm: number;
   acc: number;
   accent: "primary" | "destructive";
 }) {
   const color = accent === "primary" ? "text-primary" : "text-destructive";
-  const barColor = accent === "primary" ? "bg-primary" : "bg-destructive";
+  const healthColor =
+    health > 60
+      ? "bg-[oklch(0.75_0.22_140)]"
+      : health > 30
+        ? "bg-[oklch(0.82_0.22_85)]"
+        : "bg-destructive";
   return (
     <div className={`${side === "right" ? "text-right" : "text-left"}`}>
       <div className={`flex items-center gap-3 ${side === "right" ? "flex-row-reverse" : ""}`}>
         {char && (
-          <img src={char.image} alt={char.name} className="h-12 w-12 border border-border object-cover" />
+          <img src={char.image} alt={char.name} className="h-14 w-14 border-2 border-primary/60 object-cover shadow-[0_0_18px_var(--emerald-glow)]" />
         )}
         <div>
           <div className={`font-display text-sm tracking-widest ${color}`}>{name}</div>
           <div className="text-[10px] tracking-widest text-muted-foreground">{char?.name ?? "—"}</div>
         </div>
       </div>
-      <div className={`mt-2 h-1.5 w-full bg-input`}>
-        <div className={`h-full ${barColor} transition-all duration-200`} style={{ width: `${progress}%` }} />
+      {/* Health bar with skew for arcade look */}
+      <div
+        className={`relative mt-2 h-4 w-full overflow-hidden border border-primary/40 bg-input/80 ${
+          side === "right" ? "" : ""
+        }`}
+        style={{ transform: side === "right" ? "skewX(12deg)" : "skewX(-12deg)" }}
+      >
+        <div
+          className={`h-full ${healthColor} transition-all duration-200`}
+          style={{
+            width: `${health}%`,
+            marginLeft: side === "right" ? `${100 - health}%` : 0,
+            boxShadow: "0 0 12px currentColor",
+          }}
+        />
       </div>
-      <div className={`mt-1 font-mono text-xs ${color}`}>
-        {wpm} WPM · {acc}% ACC
+      <div className={`mt-1 flex ${side === "right" ? "justify-end" : "justify-start"} gap-3 font-mono text-[10px] ${color}`}>
+        <span>HP {Math.round(health)}</span>
+        <span className="text-muted-foreground">{wpm} WPM · {acc}% ACC · {progress}%</span>
       </div>
     </div>
   );
 }
 
-function Fighter({
+function ComboMeter({ combo, flash }: { combo: number; flash: number }) {
+  const pct = Math.min(100, (combo / 10) * 100);
+  return (
+    <div className="flex flex-col items-center">
+      <div className="font-display text-[10px] tracking-[0.3em] text-muted-foreground">COMBO</div>
+      <div
+        key={flash}
+        className="fx-combo-pop mt-1 font-display text-3xl leading-none text-glow"
+        style={{ color: combo >= 5 ? "oklch(0.9 0.25 60)" : "oklch(0.75 0.18 165)" }}
+      >
+        ×{combo}
+      </div>
+      <div className="mt-1 h-1.5 w-24 overflow-hidden border border-primary/40 bg-input/60">
+        <div
+          className="h-full transition-all duration-150"
+          style={{
+            width: `${pct}%`,
+            background:
+              combo >= 5
+                ? "linear-gradient(90deg, oklch(0.9 0.25 60), oklch(0.75 0.28 30))"
+                : "linear-gradient(90deg, var(--emerald-glow), var(--primary))",
+            boxShadow: "0 0 12px currentColor",
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function FighterFX({
+  side,
+  progress,
+  char,
+  accent,
+  attackKey,
+  hurtKey,
+}: {
+  side: "left" | "right";
+  progress: number;
+  char: ReturnType<typeof characterById>;
+  accent: "primary" | "destructive";
+  attackKey: number;
+  hurtKey: number;
+}) {
+  // Latest key wins the animation slot
+  const isAttacking = attackKey > 0 && attackKey >= hurtKey;
+  const isHurt = hurtKey > 0 && hurtKey > attackKey;
+  const glowClass =
+    accent === "primary"
+      ? "shadow-[0_0_35px_var(--emerald-glow)]"
+      : "shadow-[0_0_35px_oklch(0.7_0.28_25)]";
+  const offset = `${side === "left" ? 22 + progress * 0.25 : 78 - progress * 0.25}%`;
+
+  const animClass = isHurt
+    ? side === "left"
+      ? "fx-hurt"
+      : "fx-hurt-right"
+    : isAttacking
+      ? side === "left"
+        ? "fx-attack-left"
+        : "fx-attack-right"
+      : side === "right"
+        ? "scale-x-[-1]"
+        : "";
+
+  return (
+    <div
+      className="absolute bottom-4 -translate-x-1/2 transition-all duration-200"
+      style={{ left: offset }}
+    >
+      <div
+        key={`${attackKey}-${hurtKey}`}
+        className={`relative ${animClass}`}
+        style={{ transformOrigin: "bottom center" }}
+      >
+        {char ? (
+          <img
+            src={char.image}
+            alt={char.name}
+            className={`h-56 w-36 border-2 border-primary/60 object-cover ${glowClass}`}
+          />
+        ) : (
+          <div className={`h-56 w-36 border-2 border-primary/60 ${glowClass}`} />
+        )}
+        {/* ground reflection */}
+        <div className="absolute -bottom-3 left-1/2 h-3 w-24 -translate-x-1/2 rounded-full bg-primary/40 blur-md" />
+      </div>
+    </div>
+  );
+}
+
+function _UnusedFighter({
   side,
   progress,
   char,
