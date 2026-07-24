@@ -92,6 +92,7 @@ export type Database = {
           best_wpm: number
           losses: number
           name: string
+          owner_id: string | null
           updated_at: string
           wins: number
         }
@@ -100,6 +101,7 @@ export type Database = {
           best_wpm?: number
           losses?: number
           name: string
+          owner_id?: string | null
           updated_at?: string
           wins?: number
         }
@@ -108,6 +110,7 @@ export type Database = {
           best_wpm?: number
           losses?: number
           name?: string
+          owner_id?: string | null
           updated_at?: string
           wins?: number
         }
